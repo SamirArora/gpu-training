@@ -1,4 +1,4 @@
-using CUDA 
+using CUDA # loading CUDA will enable KernelAbstractions' CUDABackend(). Metal.jl for Mac GPU, etc.
 using Random 
 using KernelAbstractions
 using Polyester
@@ -6,19 +6,22 @@ CUDA.seed!(1)
 Random.seed!(1) 
 include("ka_utils.jl")
 
+# When we call "kernel(..)" below, implicitly, 
+# the "sin_kernel!(..)" function gets called once for each index in the array
 @kernel function sin_kernel!(array)
-    i = @index(Global)
+    i = @index(Global) # index for this call
     array[i] = sin(array[i])
 end
 
-function sin!(array, backend)
+function sin_ka(array, backend)
     work_array = copy_to_device(array, backend)
     n_tasks = length(array)
-    kernel = sin_kernel!(backend) #, cpu_args(multi_threaded, n_tasks, backend)...)
+    kernel = sin_kernel!(backend) 
     @time begin 
-        kernel(work_array, ndrange = n_tasks) 
-        KernelAbstractions.synchronize(backend) 
+        kernel(work_array, ndrange = n_tasks) # Note "ndrange" argument: it tells KA how many times to launch sin_kernel!
+        KernelAbstractions.synchronize(backend) # avoid usual benchmarking trap
     end
+    return work_array
 end
 
 function test_case(s = 10^8)
@@ -45,16 +48,16 @@ function test_case(s = 10^8)
 
         println("method 2: KernelAbstraction (CPU)")
         y = copy(x)
-        sin!(y, CPU(), false)
+        sin_ka(y, CPU())
 
         println("method 3: KernelAbstraction (GPU)")
         y = copy(x)
-        sin!(y, CUDABackend())
+        sin_ka(y, CUDABackend())
 
         println("method 4: CPU, @threads")
         y = copy(x)
         @time begin
-            Threads.@threads for i = 1:s # with :static equally slow
+            Threads.@threads for i = 1:s # even with :static this is equally slow :( 
                 y[i] = sin(y[i])
             end
         end
