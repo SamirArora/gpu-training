@@ -1,7 +1,7 @@
 using CUDA
 
 x = CUDA.rand(10^8)
-
+    
 for i in 1:5 
 
     # BAD: No sync
